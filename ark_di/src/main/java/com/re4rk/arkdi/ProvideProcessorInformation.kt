@@ -8,7 +8,6 @@ import javax.lang.model.util.Elements
 
 class ProvideProcessorInformation(
     val executableElement: ExecutableElement,
-    val singleton: Boolean,
     elements: Elements
 ) {
     val packageName: String = elements.getPackageOf(executableElement).toString()
@@ -27,6 +26,8 @@ class ProvideProcessorInformation(
         methodName
     )
     val factoryType = Factory::class.asClassName().parameterizedBy(returnType)
+
+    val providerType = Provider::class.asClassName().parameterizedBy(returnType)
 
     companion object {
         private const val FACTORY_NAME_FORMAT = "DI_%s_%s"
