@@ -2,6 +2,9 @@ package com.re4rk.arkdi
 
 import com.google.auto.service.AutoService
 import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
 import java.io.File
 import javax.annotation.processing.AbstractProcessor
@@ -55,7 +58,45 @@ class ProvideProcessor : AbstractProcessor() {
         val factoryClass = TypeSpec.classBuilder(information.factoryName)
             .addSuperinterface(information.factoryType)
 
+        if (information.singleton) {
+            generateSingletonFactory(factoryClass, information)
+        }
+
         createFactoryFile(information, factoryClass)
+    }
+
+    private fun generateSingletonFactory(
+        factoryClass: TypeSpec.Builder,
+        information: ProvideProcessorInformation
+    ) {
+        factoryClass.addFunction(
+            FunSpec
+                .builder("get")
+                .addModifiers(KModifier.OVERRIDE)
+                .returns(information.returnType)
+                .addStatement(
+                    "return InstanceHolder.INSTANCE ?: create().apply { InstanceHolder.INSTANCE = this }"
+                )
+                .build()
+        )
+        val companionObject = TypeSpec.companionObjectBuilder("InstanceHolder")
+            .addProperty(
+                PropertySpec.builder("INSTANCE", information.returnType.copy(nullable = true))
+                    .addModifiers(KModifier.PRIVATE)
+                    .initializer("null")
+                    .mutable()
+                    .build()
+            )
+            .addFunction(
+                FunSpec.builder("create")
+                    .addModifiers(KModifier.PUBLIC)
+                    .addStatement("return ${information.methodName}()")
+                    .returns(information.returnType)
+                    .build()
+            )
+            .build()
+
+        factoryClass.addType(companionObject)
     }
 
     private fun createFactoryFile(
