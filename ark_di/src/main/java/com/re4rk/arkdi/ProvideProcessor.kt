@@ -1,6 +1,7 @@
 package com.re4rk.arkdi
 
 import com.google.auto.service.AutoService
+import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
@@ -19,6 +20,7 @@ import javax.lang.model.SourceVersion
 import javax.lang.model.element.ElementKind
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.TypeElement
+import javax.lang.model.util.Elements
 
 @SupportedSourceVersion(SourceVersion.RELEASE_11)
 @AutoService(Processor::class)
@@ -51,7 +53,45 @@ class ProvideProcessor : AbstractProcessor() {
 
         informationList.map { generateFactory(it) }
 
+        roundEnv.getElementsAnnotatedWith(ArkDiAndroidApp::class.java)
+            .filter { it.kind == ElementKind.CLASS }
+            .map {
+                generateAndroidAppFactory(it as TypeElement, processingEnv.elementUtils)
+            }
         return true
+    }
+
+    private fun generateAndroidAppFactory(typeElement: TypeElement, elements: Elements) {
+        val applicationClass = TypeSpec.classBuilder("DI_" + typeElement.simpleName.toString())
+            .superclass(DiContainer::class.asTypeName())
+            .addFunctions(
+                informationList.map {
+                    FunSpec.builder("get" + it.returnType.toString() + "Factory")
+                        .addStatement(
+                            "return %T.create(${
+                                it.executableElement.parameters.joinToString(", ") {
+                                    "get" + it.simpleName.toString().capitalize() + "Factory" + "()"
+                                }
+                            })",
+                            ClassName(it.packageName, it.factoryName)
+                        )
+                        .returns(it.factoryType)
+                        .build()
+                }
+            )
+
+        FileSpec.builder(
+            elements.getPackageOf(typeElement).toString(),
+            "DI_${typeElement.simpleName}"
+        )
+            .addType(applicationClass.build())
+            .apply {
+                informationList.map {
+                    addImport(it.returnPackageName, it.returnClassName)
+                }
+            }
+            .build()
+            .writeTo(File(processingEnv.options["kapt.kotlin.generated"], ""))
     }
 
     private fun generateFactory(information: ProvideProcessorInformation) {
@@ -167,6 +207,13 @@ class ProvideProcessor : AbstractProcessor() {
         true -> this
         false -> {
             String(this.toCharArray().apply { this[0] = Character.toLowerCase(this[0]) })
+        }
+    }
+
+    private fun String.capitalize(): String = when (isEmpty()) {
+        true -> this
+        false -> {
+            String(this.toCharArray().apply { this[0] = Character.toUpperCase(this[0]) })
         }
     }
 }
