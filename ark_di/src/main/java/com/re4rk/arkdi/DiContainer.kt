@@ -1,4 +1,4 @@
-package woowacourse.shopping.di
+package com.re4rk.arkdi
 
 import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredFunctions

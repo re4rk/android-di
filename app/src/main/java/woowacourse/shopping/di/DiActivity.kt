@@ -1,6 +1,7 @@
 package woowacourse.shopping.di
 
 import androidx.appcompat.app.AppCompatActivity
+import com.re4rk.arkdi.DiContainer
 import kotlin.reflect.KClass
 
 open class DiActivity : AppCompatActivity() {

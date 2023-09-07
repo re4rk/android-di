@@ -1,8 +1,8 @@
-package woowacourse.shopping.di
+package com.re4rk.arkdi
 
-import junit.framework.TestCase.assertEquals
-import junit.framework.TestCase.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 class DiContainerTest {
     interface FakeDiRepository {
