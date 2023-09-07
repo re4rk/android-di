@@ -120,14 +120,15 @@ class ProvideProcessor : AbstractProcessor() {
                     elements.getPackageOf(typeElement).toString(),
                     typeElement.simpleName.toString()
                 )
-            ).addProperty(
+            )
+            .addSuperinterface(HasDiContainer::class.asTypeName())
+            .addProperty(
                 PropertySpec.builder(
                     "diContainer",
-                    ClassName(
-                        elements.getPackageOf(typeElement).toString(),
-                        "DI_Container_" + typeElement.simpleName.toString()
-                    )
+                    DiContainer::class.asTypeName()
                 ).initializer("DI_Container_" + typeElement.simpleName.toString() + "()")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .mutable()
                     .build()
             )
 
