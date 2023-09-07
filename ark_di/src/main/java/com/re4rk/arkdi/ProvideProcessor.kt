@@ -1,6 +1,9 @@
 package com.re4rk.arkdi
 
 import com.google.auto.service.AutoService
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.TypeSpec
+import java.io.File
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.Processor
@@ -41,10 +44,29 @@ class ProvideProcessor : AbstractProcessor() {
                     it.getAnnotation(Singleton::class.java) != null,
                     processingEnv.elementUtils
                 ).let { information ->
-                    // TODO
+                    generateFactory(information)
                 }
             }
 
         return true
+    }
+
+    private fun generateFactory(information: ProvideProcessorInformation) {
+        val factoryClass = TypeSpec.classBuilder(information.factoryName)
+            .addSuperinterface(information.factoryType)
+
+        createFactoryFile(information, factoryClass)
+    }
+
+    private fun createFactoryFile(
+        information: ProvideProcessorInformation,
+        factoryClass: TypeSpec.Builder
+    ) {
+        FileSpec.builder(information.packageName, information.factoryName)
+            .addImport(information.className, information.methodName)
+            .addImport(information.returnPackageName, information.returnClassName)
+            .addType(factoryClass.build())
+            .build()
+            .writeTo(File(processingEnv.options["kapt.kotlin.generated"], ""))
     }
 }
