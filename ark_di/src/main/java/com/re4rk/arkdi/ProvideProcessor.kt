@@ -57,27 +57,78 @@ class ProvideProcessor : AbstractProcessor() {
             .filter { it.kind == ElementKind.CLASS }
             .map {
                 generateAndroidAppFactory(it as TypeElement, processingEnv.elementUtils)
+                generateApplication(it, processingEnv.elementUtils)
             }
         return true
     }
 
     private fun generateAndroidAppFactory(typeElement: TypeElement, elements: Elements) {
-        val applicationClass = TypeSpec.classBuilder("DI_" + typeElement.simpleName.toString())
-            .superclass(DiContainer::class.asTypeName())
-            .addFunctions(
-                informationList.map {
-                    FunSpec.builder("get" + it.returnType.toString() + "Factory")
-                        .addStatement(
-                            "return %T.create(${
-                                it.executableElement.parameters.joinToString(", ") {
-                                    "get" + it.simpleName.toString().capitalize() + "Factory" + "()"
-                                }
-                            })",
-                            ClassName(it.packageName, it.factoryName)
+        val applicationClass =
+            TypeSpec.classBuilder("DI_Container_" + typeElement.simpleName.toString())
+                .superclass(DiContainer::class.asTypeName())
+                .addProperties(
+                    informationList.map {
+                        PropertySpec.builder(
+                            it.returnType.toString().decapitalize(),
+                            it.returnType
                         )
-                        .returns(it.factoryType)
-                        .build()
+                            .initializer(
+                                "get" + it.returnType.toString() + "Factory" + "().get()"
+                            )
+                            .build()
+                    }
+                )
+                .addFunctions(
+                    informationList.map {
+                        FunSpec.builder("get" + it.returnType.toString() + "Factory")
+                            .addStatement(
+                                "return %T.create(${
+                                    it.executableElement.parameters.joinToString(", ") {
+                                        "get" + it.simpleName.toString()
+                                            .capitalize() + "Factory" + "()"
+                                    }
+                                })",
+                                ClassName(it.packageName, it.factoryName)
+                            )
+                            .addModifiers(KModifier.PRIVATE)
+                            .returns(it.factoryType)
+                            .build()
+                    }
+                )
+
+        FileSpec.builder(
+            elements.getPackageOf(typeElement).toString(),
+            "DI_Container_${typeElement.simpleName}"
+        )
+            .addType(applicationClass.build())
+            .apply {
+                informationList.map {
+                    addImport(it.returnPackageName, it.returnClassName)
                 }
+            }
+            .build()
+            .writeTo(File(processingEnv.options["kapt.kotlin.generated"], ""))
+    }
+
+    private fun generateApplication(
+        typeElement: TypeElement,
+        elements: Elements
+    ) {
+        val applicationClass = TypeSpec.classBuilder("Di_" + typeElement.simpleName.toString())
+            .superclass(
+                ClassName(
+                    elements.getPackageOf(typeElement).toString(),
+                    typeElement.simpleName.toString()
+                )
+            ).addProperty(
+                PropertySpec.builder(
+                    "diContainer",
+                    ClassName(
+                        elements.getPackageOf(typeElement).toString(),
+                        "DI_Container_" + typeElement.simpleName.toString()
+                    )
+                ).initializer("DI_Container_" + typeElement.simpleName.toString() + "()")
+                    .build()
             )
 
         FileSpec.builder(

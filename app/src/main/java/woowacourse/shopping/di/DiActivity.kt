@@ -7,7 +7,7 @@ import kotlin.reflect.KClass
 open class DiActivity : AppCompatActivity() {
     private val diContainer: DiContainer by lazy {
         DiActivityModule(
-            (application as? DiApplication)?.diContainer
+            (application as? DiApplication)?.diContainerLegacy
                 ?: throw IllegalStateException(ERROR_MESSAGE_NO_DI_APPLICATION)
         )
     }
