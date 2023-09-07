@@ -4,9 +4,12 @@ import com.google.auto.service.AutoService
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.ParameterSpec
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.asTypeName
 import java.io.File
+import java.util.Locale
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.ProcessingEnvironment
 import javax.annotation.processing.Processor
@@ -20,6 +23,7 @@ import javax.lang.model.element.TypeElement
 @SupportedSourceVersion(SourceVersion.RELEASE_11)
 @AutoService(Processor::class)
 class ProvideProcessor : AbstractProcessor() {
+    private lateinit var informationList: List<ProvideProcessorInformation>
 
     @Override
     override fun init(processingEnv: ProcessingEnvironment) {
@@ -39,92 +43,130 @@ class ProvideProcessor : AbstractProcessor() {
         annotations: MutableSet<out TypeElement>,
         roundEnv: RoundEnvironment
     ): Boolean {
-        roundEnv.getElementsAnnotatedWith(Provides::class.java)
+        informationList = roundEnv.getElementsAnnotatedWith(Provides::class.java)
             .filter { it.kind == ElementKind.METHOD }
             .map {
-                ProvideProcessorInformation(
-                    executableElement = it as ExecutableElement,
-                    it.getAnnotation(Singleton::class.java) != null,
-                    processingEnv.elementUtils
-                ).let { information ->
-                    generateFactory(information)
-                }
+                ProvideProcessorInformation(it as ExecutableElement, processingEnv.elementUtils)
             }
+
+        informationList.map { generateFactory(it) }
 
         return true
     }
 
     private fun generateFactory(information: ProvideProcessorInformation) {
-        val factoryClass = TypeSpec.classBuilder(information.factoryName)
-            .addSuperinterface(information.factoryType)
+        val parameterInformationList = provideProcessorInformations(information)
 
-        if (information.singleton) {
-            generateSingletonFactory(factoryClass, information)
-        } else {
-            generateProtoTypeFactory(factoryClass, information)
+        val funSpec = FunSpec.constructorBuilder()
+
+        parameterInformationList.map {
+            funSpec.addParameter(
+                ParameterSpec.builder(
+                    it.returnType.toString().decapitalize(),
+                    it.providerType
+                ).build()
+            ).addStatement(
+                "this.${it.returnType.toString().decapitalize()} = ${
+                    it.returnType.toString().decapitalize()
+                }"
+            )
         }
 
-        createFactoryFile(information, factoryClass)
+        TypeSpec.classBuilder(information.factoryName)
+            .addSuperinterface(information.factoryType)
+            .primaryConstructor(funSpec.build())
+            .addProperties(makePropertySpecs(parameterInformationList))
+            .addGetter(information, getParameters(information))
+            .addType(generateCompanionObject(getParameterProviders(information), information))
+            .createFactoryFile(information)
     }
 
-    private fun generateSingletonFactory(
-        factoryClass: TypeSpec.Builder,
+    private fun provideProcessorInformations(information: ProvideProcessorInformation) =
+        information.executableElement.parameters.map { parameter ->
+            val parameterInformation = informationList
+                .find { it.executableElement.returnType == parameter.asType() }
+                ?: throw IllegalStateException()
+            generateFactory(parameterInformation)
+            parameterInformation
+        }
+
+    private fun makePropertySpecs(parameterInformationList: List<ProvideProcessorInformation>) =
+        parameterInformationList.map { parameterInformation ->
+            PropertySpec.builder(
+                parameterInformation.returnType.toString()
+                    .replaceFirstChar { it.lowercase(Locale.getDefault()) },
+                parameterInformation.providerType
+            ).build()
+        }
+
+    private fun getParameters(information: ProvideProcessorInformation): List<ParameterSpec> =
+        information.executableElement.parameters.map { parameter ->
+            ParameterSpec.builder(
+                parameter.simpleName.toString(),
+                parameter.asType().asTypeName()
+            ).build()
+        }
+
+    private fun getParameterProviders(information: ProvideProcessorInformation): List<ParameterSpec> =
+        information.executableElement.parameters.map { parameter ->
+            ParameterSpec.builder(
+                parameter.simpleName.toString() + "Provider",
+                informationList
+                    .find { it.executableElement.returnType == parameter.asType() }
+                    ?.providerType ?: throw IllegalStateException()
+            ).build()
+        }
+
+    private fun TypeSpec.Builder.addGetter(
+        information: ProvideProcessorInformation,
+        parameters: List<ParameterSpec>
+    ): TypeSpec.Builder = this.addFunction(
+        FunSpec.builder("get")
+            .addModifiers(KModifier.OVERRIDE)
+            .addStatement(
+                "return ${information.methodName}(${
+                    parameters.joinToString(", ") {
+                        it.name + ".get()"
+                    }
+                })"
+            )
+            .returns(information.returnType)
+            .build()
+    )
+
+    private fun generateCompanionObject(
+        parameterProviders: List<ParameterSpec>,
         information: ProvideProcessorInformation
-    ) {
-        factoryClass.addFunction(
-            FunSpec
-                .builder("get")
-                .addModifiers(KModifier.OVERRIDE)
-                .returns(information.returnType)
+    ) = TypeSpec.companionObjectBuilder()
+        .addFunction(
+            FunSpec.builder("create")
+                .addModifiers(KModifier.PUBLIC)
+                .addParameters(parameterProviders)
                 .addStatement(
-                    "return InstanceHolder.INSTANCE ?: create().apply { InstanceHolder.INSTANCE = this }"
+                    "return ${information.factoryName}(${
+                        parameterProviders.joinToString(", ") {
+                            it.name
+                        }
+                    })"
                 )
+                .returns(information.factoryType)
                 .build()
         )
-        val companionObject = TypeSpec.companionObjectBuilder("InstanceHolder")
-            .addProperty(
-                PropertySpec.builder("INSTANCE", information.returnType.copy(nullable = true))
-                    .addModifiers(KModifier.PRIVATE)
-                    .initializer("null")
-                    .mutable()
-                    .build()
-            )
-            .addFunction(
-                FunSpec.builder("create")
-                    .addModifiers(KModifier.PUBLIC)
-                    .addStatement("return ${information.methodName}()")
-                    .returns(information.returnType)
-                    .build()
-            )
-            .build()
+        .build()
 
-        factoryClass.addType(companionObject)
-    }
-
-    private fun generateProtoTypeFactory(
-        factoryClass: TypeSpec.Builder,
-        information: ProvideProcessorInformation
-    ) {
-        factoryClass
-            .addFunction(
-                FunSpec
-                    .builder("get")
-                    .addModifiers(KModifier.OVERRIDE)
-                    .returns(information.returnType)
-                    .addStatement("return ${information.methodName}()")
-                    .build()
-            )
-    }
-
-    private fun createFactoryFile(
-        information: ProvideProcessorInformation,
-        factoryClass: TypeSpec.Builder
-    ) {
+    private fun TypeSpec.Builder.createFactoryFile(information: ProvideProcessorInformation) {
         FileSpec.builder(information.packageName, information.factoryName)
             .addImport(information.className, information.methodName)
             .addImport(information.returnPackageName, information.returnClassName)
-            .addType(factoryClass.build())
+            .addType(this.build())
             .build()
             .writeTo(File(processingEnv.options["kapt.kotlin.generated"], ""))
+    }
+
+    private fun String.decapitalize(): String = when (isEmpty()) {
+        true -> this
+        false -> {
+            String(this.toCharArray().apply { this[0] = Character.toLowerCase(this[0]) })
+        }
     }
 }
