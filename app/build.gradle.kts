@@ -45,6 +45,9 @@ android {
 dependencies {
     implementation(project(":domain"))
 
+    implementation(project(":ark_di"))
+    kapt(project(":ark_di"))
+
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
@@ -75,4 +78,10 @@ dependencies {
     testImplementation("io.mockk:mockk:1.12.2")
     // AssertJ
     testImplementation("org.assertj:assertj-core:3.24.2")
+    //
+    implementation("javax.inject", "javax.inject", "1")
+    annotationProcessor("com.google.auto.service:auto-service:1.0-rc6")
+    implementation("com.google.auto.service:auto-service:1.0-rc6")
+    compileOnly("com.google.auto.service:auto-service:1.0-rc6")
+    kapt("com.google.auto.service:auto-service:1.0-rc6")
 }
