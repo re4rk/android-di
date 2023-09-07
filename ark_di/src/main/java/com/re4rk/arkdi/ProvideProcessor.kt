@@ -60,6 +60,8 @@ class ProvideProcessor : AbstractProcessor() {
 
         if (information.singleton) {
             generateSingletonFactory(factoryClass, information)
+        } else {
+            generateProtoTypeFactory(factoryClass, information)
         }
 
         createFactoryFile(information, factoryClass)
@@ -97,6 +99,21 @@ class ProvideProcessor : AbstractProcessor() {
             .build()
 
         factoryClass.addType(companionObject)
+    }
+
+    private fun generateProtoTypeFactory(
+        factoryClass: TypeSpec.Builder,
+        information: ProvideProcessorInformation
+    ) {
+        factoryClass
+            .addFunction(
+                FunSpec
+                    .builder("get")
+                    .addModifiers(KModifier.OVERRIDE)
+                    .returns(information.returnType)
+                    .addStatement("return ${information.methodName}()")
+                    .build()
+            )
     }
 
     private fun createFactoryFile(
