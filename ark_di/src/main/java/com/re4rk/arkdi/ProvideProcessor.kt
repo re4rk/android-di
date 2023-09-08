@@ -66,15 +66,13 @@ class ProvideProcessor : AbstractProcessor() {
         val applicationClass =
             TypeSpec.classBuilder("DI_Container_" + typeElement.simpleName.toString())
                 .superclass(DiContainer::class.asTypeName())
-                .addProperties(
+                .addFunctions(
                     informationList.map {
-                        PropertySpec.builder(
-                            it.returnType.toString().decapitalize(),
-                            it.returnType
-                        )
-                            .initializer(
-                                "get" + it.returnType.toString() + "Factory" + "().get()"
+                        FunSpec.builder(it.executableElement.simpleName.toString())
+                            .addStatement(
+                                "return get" + it.returnType.toString() + "Factory" + "().get()"
                             )
+                            .returns(it.returnType)
                             .build()
                     }
                 )
