@@ -2,12 +2,13 @@ package woowacourse.shopping.di
 
 import androidx.appcompat.app.AppCompatActivity
 import com.re4rk.arkdi.DiContainer
+import com.re4rk.arkdi.HasDiContainer
 import kotlin.reflect.KClass
 
 open class DiActivity : AppCompatActivity() {
     private val diContainer: DiContainer by lazy {
         DiActivityModule(
-            (application as? DiApplication)?.diContainerLegacy
+            (application as? HasDiContainer)?.diContainer
                 ?: throw IllegalStateException(ERROR_MESSAGE_NO_DI_APPLICATION)
         )
     }

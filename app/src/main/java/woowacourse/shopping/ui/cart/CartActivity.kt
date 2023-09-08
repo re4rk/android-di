@@ -2,12 +2,17 @@ package woowacourse.shopping.ui.cart
 
 import android.os.Bundle
 import android.widget.Toast
+import com.re4rk.arkdi.DiContainer
+import com.re4rk.arkdi.HasDiContainer
+import javax.inject.Inject
 import woowacourse.shopping.R
 import woowacourse.shopping.databinding.ActivityCartBinding
 import woowacourse.shopping.di.DiActivity
 import woowacourse.shopping.ui.util.viewModels
 
-class CartActivity : DiActivity() {
+class CartActivity : DiActivity(), HasDiContainer {
+    @Inject
+    override lateinit var diContainer: DiContainer
 
     private val binding by lazy { ActivityCartBinding.inflate(layoutInflater) }
 
